@@ -1,0 +1,341 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>AI Hand Particle Control - Bilal Project</title>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@mediapipe/hands/hands.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@mediapipe/camera_utils/camera_utils.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/gsap/3.9.1/gsap.min.js"></script>
+    <style>
+        body { 
+            margin: 0; 
+            overflow: hidden; 
+            background: black; 
+            font-family: Arial, Helvetica, sans-serif;
+        }
+        
+        #video {
+            position: fixed;
+            bottom: 20px;
+            right: 20px;
+            width: 200px;
+            height: 150px;
+            transform: scaleX(-1);
+            border-radius: 12px;
+            border: 3px solid cyan;
+            box-shadow: 0 0 20px cyan;
+            z-index: 1000;
+        }
+        
+        #ui {
+            position: fixed;
+            top: 20px;
+            left: 20px;
+            background: rgba(0,0,0,0.8);
+            color: white;
+            padding: 20px 30px;
+            border-radius: 15px;
+            border-left: 6px solid cyan;
+            box-shadow: 0 0 30px rgba(0,255,255,0.3);
+            z-index: 1000;
+        }
+        
+        h1 {
+            margin: 0;
+            color: cyan;
+            text-shadow: 0 0 10px cyan;
+        }
+        
+        #shape {
+            position: fixed;
+            bottom: 30px;
+            left: 30px;
+            background: rgba(0,0,0,0.7);
+            color: white;
+            padding: 15px 25px;
+            border-radius: 40px;
+            border: 1px solid cyan;
+            font-size: 1.2rem;
+            z-index: 1000;
+        }
+        
+        .github-corner {
+            position: fixed;
+            top: 20px;
+            right: 20px;
+            background: black;
+            color: white;
+            padding: 12px 24px;
+            border-radius: 40px;
+            border: 2px solid cyan;
+            text-decoration: none;
+            z-index: 1000;
+            font-weight: bold;
+        }
+        
+        .github-corner:hover {
+            background: cyan;
+            color: black;
+        }
+    </style>
+</head>
+<body>
+    <video id="video" autoplay playsinline></video>
+    
+    <div id="ui">
+        <h1>🤚 AI HAND PARTICLE CONTROL</h1>
+        <p>✋ Open Palm = Change Shape | 🤏 Pinch = Zoom | 👆 Move = Drag</p>
+    </div>
+    
+    <div id="shape">
+        🔵 Current: <span id="shape-name" style="color:cyan;">SPHERE</span>
+    </div>
+    
+    <a class="github-corner" id="githubBtn" href="#" target="_blank">
+        📁 GitHub Repository
+    </a>
+
+    <script>
+        // 🔴 YAHAN APNA GITHUB LINK LAGAO 🔴
+        const GITHUB_LINK = "https://github.com/bilal786-dev/ai-particle-control";
+        document.getElementById('githubBtn').href = GITHUB_LINK;
+        
+        // ---------- SETUP ----------
+        const PARTICLE_COUNT = 5000;
+        let currentShape = 'sphere';
+        let scene, camera, renderer, particles, geometry;
+        let cooldown = false;
+        
+        // ---------- SHAPES ----------
+        const shapes = {
+            sphere: () => {
+                let arr = [];
+                for(let i=0; i<PARTICLE_COUNT; i++) {
+                    let phi = Math.acos(-1 + (2 * i) / PARTICLE_COUNT);
+                    let theta = Math.sqrt(PARTICLE_COUNT * Math.PI) * phi;
+                    arr.push(
+                        Math.cos(theta) * Math.sin(phi) * 5,
+                        Math.sin(theta) * Math.sin(phi) * 5,
+                        Math.cos(phi) * 5
+                    );
+                }
+                return arr;
+            },
+            
+            heart: () => {
+                let arr = [];
+                for(let i=0; i<PARTICLE_COUNT; i++) {
+                    let t = (i / PARTICLE_COUNT) * Math.PI * 2;
+                    let x = 16 * Math.pow(Math.sin(t), 3);
+                    let y = 13 * Math.cos(t) - 5 * Math.cos(2*t) - 2 * Math.cos(3*t) - Math.cos(4*t);
+                    arr.push(x * 0.25, y * 0.25, (Math.random()-0.5)*3);
+                }
+                return arr;
+            },
+            
+            saturn: () => {
+                let arr = [];
+                for(let i=0; i<PARTICLE_COUNT; i++) {
+                    if(i < PARTICLE_COUNT * 0.6) {
+                        let phi = Math.acos(-1 + (2 * i) / (PARTICLE_COUNT*0.6));
+                        let theta = Math.sqrt(PARTICLE_COUNT) * phi;
+                        arr.push(
+                            Math.cos(theta) * Math.sin(phi) * 4,
+                            Math.sin(theta) * Math.sin(phi) * 4,
+                            Math.cos(phi) * 4
+                        );
+                    } else {
+                        let angle = Math.random() * Math.PI * 2;
+                        let radius = 6 + Math.random() * 2;
+                        arr.push(
+                            Math.cos(angle) * radius,
+                            (Math.random()-0.5),
+                            Math.sin(angle) * radius
+                        );
+                    }
+                }
+                return arr;
+            },
+            
+            cube: () => {
+                let arr = [];
+                for(let i=0; i<PARTICLE_COUNT; i++) {
+                    arr.push(
+                        (Math.random()-0.5)*10,
+                        (Math.random()-0.5)*10,
+                        (Math.random()-0.5)*10
+                    );
+                }
+                return arr;
+            },
+            
+            dna: () => {
+                let arr = [];
+                for(let i=0; i<PARTICLE_COUNT; i++) {
+                    let t = i * 0.01;
+                    arr.push(
+                        Math.cos(t) * 3,
+                        (i - PARTICLE_COUNT/2) * 0.02,
+                        Math.sin(t) * 3
+                    );
+                }
+                return arr;
+            }
+        };
+        
+        // ---------- THREE JS ----------
+        function init() {
+            scene = new THREE.Scene();
+            scene.background = new THREE.Color(0x050510);
+            
+            camera = new THREE.PerspectiveCamera(75, window.innerWidth/window.innerHeight, 0.1, 1000);
+            camera.position.set(12, 4, 20);
+            
+            renderer = new THREE.WebGLRenderer({antialias: true});
+            renderer.setSize(window.innerWidth, window.innerHeight);
+            document.body.appendChild(renderer.domElement);
+            
+            geometry = new THREE.BufferGeometry();
+            geometry.setAttribute('position', new THREE.Float32BufferAttribute(shapes.sphere(), 3));
+            
+            let material = new THREE.PointsMaterial({
+                color: 0x00ffff,
+                size: 0.15,
+                transparent: true,
+                blending: THREE.AdditiveBlending,
+                sizeAttenuation: true
+            });
+            
+            particles = new THREE.Points(geometry, material);
+            scene.add(particles);
+            
+            // Stars
+            let starGeo = new THREE.BufferGeometry();
+            let starPos = [];
+            for(let i=0; i<2000; i++) {
+                starPos.push(
+                    (Math.random()-0.5)*200,
+                    (Math.random()-0.5)*200,
+                    (Math.random()-0.5)*200
+                );
+            }
+            starGeo.setAttribute('position', new THREE.Float32BufferAttribute(starPos, 3));
+            let stars = new THREE.Points(starGeo, new THREE.PointsMaterial({color: 0x888888, size: 0.2}));
+            scene.add(stars);
+        }
+        
+        // ---------- SHAPE CHANGE ----------
+        function changeShape(shapeName) {
+            if(!shapes[shapeName]) return;
+            
+            let newPos = shapes[shapeName]();
+            let posAttr = geometry.attributes.position;
+            let start = posAttr.array.slice();
+            let end = new Float32Array(newPos);
+            
+            let startTime = performance.now();
+            
+            function morph() {
+                let now = performance.now();
+                let progress = Math.min(1, (now - startTime) / 1500);
+                
+                for(let i=0; i<posAttr.array.length; i++) {
+                    posAttr.array[i] = start[i] * (1-progress) + end[i] * progress;
+                }
+                posAttr.needsUpdate = true;
+                
+                if(progress < 1) requestAnimationFrame(morph);
+            }
+            requestAnimationFrame(morph);
+            
+            // Random color
+            let hue = Math.random();
+            let color = new THREE.Color().setHSL(hue, 0.8, 0.6);
+            gsap.to(particles.material.color, {
+                r: color.r, g: color.g, b: color.b,
+                duration: 1.2
+            });
+            
+            document.getElementById('shape-name').innerText = shapeName.toUpperCase();
+            currentShape = shapeName;
+        }
+        
+        // ---------- HAND TRACKING ----------
+        const hands = new Hands({
+            locateFile: (file) => `https://cdn.jsdelivr.net/npm/@mediapipe/hands/${file}`
+        });
+        
+        hands.setOptions({
+            maxNumHands: 1,
+            modelComplexity: 1,
+            minDetectionConfidence: 0.5
+        });
+        
+        hands.onResults((results) => {
+            if(results.multiHandLandmarks && results.multiHandLandmarks.length > 0) {
+                let lm = results.multiHandLandmarks[0];
+                
+                // Position - Index finger
+                let x = (lm[8].x - 0.5) * -40;
+                let y = (lm[8].y - 0.5) * -30;
+                particles.position.lerp(new THREE.Vector3(x, y, 0), 0.1);
+                
+                // Scale - Pinch
+                let dx = lm[8].x - lm[4].x;
+                let dy = lm[8].y - lm[4].y;
+                let dist = Math.sqrt(dx*dx + dy*dy);
+                let scale = Math.max(0.4, Math.min(2.2, dist * 12));
+                particles.scale.set(scale, scale, scale);
+                
+                // Shape Change - Open Palm
+                if(!cooldown) {
+                    if(lm[12].y < lm[10].y && lm[16].y < lm[14].y) {
+                        cooldown = true;
+                        setTimeout(() => cooldown = false, 1000);
+                        
+                        let shapesList = Object.keys(shapes);
+                        let next;
+                        do {
+                            next = shapesList[Math.floor(Math.random() * shapesList.length)];
+                        } while(next === currentShape);
+                        changeShape(next);
+                    }
+                }
+            }
+        });
+        
+        // ---------- CAMERA ----------
+        const video = document.getElementById('video');
+        const cameraPipe = new Camera(video, {
+            onFrame: async () => {
+                await hands.send({image: video});
+            },
+            width: 640,
+            height: 480
+        });
+        
+        // ---------- START ----------
+        init();
+        cameraPipe.start();
+        
+        // ---------- ANIMATE ----------
+        function animate() {
+            requestAnimationFrame(animate);
+            particles.rotation.y += 0.001;
+            particles.rotation.x += 0.0005;
+            renderer.render(scene, camera);
+        }
+        animate();
+        
+        // ---------- RESIZE ----------
+        window.addEventListener('resize', () => {
+            camera.aspect = window.innerWidth / window.innerHeight;
+            camera.updateProjectionMatrix();
+            renderer.setSize(window.innerWidth, window.innerHeight);
+        });
+        
+        console.log("✅ Bilal Project Ready!");
+    </script>
+</body>
+</html>
